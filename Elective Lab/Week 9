@@ -1,1 +1,260 @@
+question_1:
+[16/10/26, 12:29:49 AM] Ekbal: #include <stdio.h>
+#include <mpi.h>
+
+int main() {
+    int rank, size, i;
+    int local_data[3], gathered[300];
+
+    MPI_Init(NULL, NULL);
+    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+    MPI_Comm_size(MPI_COMM_WORLD, &size);
+
+    for (i = 0; i < 3; i++)
+        local_data[i] = rank * 10 + i;
+
+    printf("Process %d local: %d %d %d\n", rank, local_data[0], local_data[1], local_data[2]);
+
+    MPI_Gather(local_data, 3, MPI_INT, gathered, 3, MPI_INT, 0, MPI_COMM_WORLD);
+
+    if (rank == 0) {
+        printf("Process 0 gathered array:");
+        for (i = 0; i < 3 * size; i++)
+            printf(" %d", gathered[i]);
+        printf("\n");
+    }
+
+    MPI_Finalize();
+    return 0;
+}
+
+
+
+question_2:
+#include <mpi.h>
+
+int main() {
+    int rank, size, i, n, chunk;
+    int full[1000], part[1000];
+
+    MPI_Init(NULL, NULL);
+    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+    MPI_Comm_size(MPI_COMM_WORLD, &size);
+
+    if (rank == 0) {
+        printf("Enter array size (divisible by %d): ", size);
+        fflush(stdout);
+        scanf("%d", &n);
+        printf("Enter %d elements: ", n);
+        fflush(stdout);
+        for (i = 0; i < n; i++)
+            scanf("%d", &full[i]);
+    }
+
+    MPI_Bcast(&n, 1, MPI_INT, 0, MPI_COMM_WORLD);
+
+    if (n % size != 0) {
+        if (rank == 0)
+            printf("Array size must be divisible by number of processes\n");
+        MPI_Finalize();
+        return 0;
+    }
+
+    chunk = n / size;
+
+    MPI_Scatter(full, chunk, MPI_INT, part, chunk, MPI_INT, 0, MPI_COMM_WORLD);
+
+    printf("Process %d received:", rank);
+    for (i = 0; i < chunk; i++)
+        printf(" %d", part[i]);
+    printf("\n");
+
+    MPI_Finalize();
+    return 0;
+}
+
+
+
+
+question_3:
+#include <stdlib.h>
+#include <time.h>
+#include <mpi.h>
+
+int main() {
+    int rank, value, gmax, gmin;
+
+    MPI_Init(NULL, NULL);
+    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+
+    srand(time(NULL) + rank);
+    value = rand() % 1000;
+
+    MPI_Allreduce(&value, &gmax, 1, MPI_INT, MPI_MAX, MPI_COMM_WORLD);
+    MPI_Allreduce(&value, &gmin, 1, MPI_INT, MPI_MIN, MPI_COMM_WORLD);
+
+    printf("Process %d generated %d. Global Max: %d, Global Min: %d\n", rank, value, gmax, gmin);
+
+    MPI_Finalize();
+    return 0;
+}
+
+
+
+
+
+question_4:
+#include <unistd.h>
+#include <mpi.h>
+
+int main() {
+    int rank;
+
+    MPI_Init(NULL, NULL);
+    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+
+    printf("Process %d: Before barrier\n", rank);
+    fflush(stdout);
+
+    usleep(rank * 100000);
+
+    MPI_Barrier(MPI_COMM_WORLD);
+
+    printf("Process %d: After barrier\n", rank);
+
+    MPI_Finalize();
+    return 0;
+}
+
+
+
+
+question_5:
+#include <stdlib.h>
+#include <time.h>
+#include <mpi.h>
+
+int main() {
+    int rank, size;
+    long i, points_per_proc, total;
+    long local_hits = 0, global_hits = 0;
+    double x, y, start, end;
+
+    MPI_Init(NULL, NULL);
+    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+    MPI_Comm_size(MPI_COMM_WORLD, &size);
+
+    if (rank == 0) {
+        printf("Enter points per process: ");
+        fflush(stdout);
+        scanf("%ld", &points_per_proc);
+    }
+
+    MPI_Bcast(&points_per_proc, 1, MPI_LONG, 0, MPI_COMM_WORLD);
+
+    srand(time(NULL) + rank);
+    start = MPI_Wtime();
+
+    for (i = 0; i < points_per_proc; i++) {
+        x = (double)rand() / RAND_MAX;
+        y = (double)rand() / RAND_MAX;
+        if (x * x + y * y <= 1.0)
+            local_hits++;
+    }
+
+    MPI_Reduce(&local_hits, &global_hits, 1, MPI_LONG, MPI_SUM, 0, MPI_COMM_WORLD);
+
+    end = MPI_Wtime();
+
+    printf("Process %d local hits: %ld\n", rank, local_hits);
+
+    if (rank == 0) {
+        total = points_per_proc * size;
+        printf("Total points: %ld\n", total);
+        printf("Estimated Pi: %.5f\n", 4.0 * global_hits / total);
+        printf("Execution Time: %f seconds\n", end - start);
+    }
+
+    MPI_Finalize();
+    return 0;
+}
+
+
+
+
+question_6:
+#include <mpi.h>
+
+#define MAX 50
+
+int main() {
+    int rank, size, i, j, n, rows;
+    int A[MAX * MAX], x[MAX], y[MAX];
+    int local_A[MAX * MAX], local_y[MAX];
+
+    MPI_Init(NULL, NULL);
+    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+    MPI_Comm_size(MPI_COMM_WORLD, &size);
+
+    if (rank == 0) {
+        printf("Enter N (divisible by %d): ", size);
+        fflush(stdout);
+        scanf("%d", &n);
+        printf("Enter matrix A (%d x %d):\n", n, n);
+        fflush(stdout);
+        for (i = 0; i < n; i++)
+            for (j = 0; j < n; j++)
+                scanf("%d", &A[i * n + j]);
+        printf("Enter vector x (%d elements): ", n);
+        fflush(stdout);
+        for (i = 0; i < n; i++)
+            scanf("%d", &x[i]);
+    }
+
+    MPI_Bcast(&n, 1, MPI_INT, 0, MPI_COMM_WORLD);
+
+    if (n % size != 0) {
+        if (rank == 0)
+            printf("N must be divisible by number of processes\n");
+        MPI_Finalize();
+        return 0;
+    }
+
+    rows = n / size;
+
+    MPI_Scatter(A, rows * n, MPI_INT, local_A, rows * n, MPI_INT, 0, MPI_COMM_WORLD);
+    MPI_Bcast(x, n, MPI_INT, 0, MPI_COMM_WORLD);
+
+    printf("Process %d: Scatter A part:", rank);
+    for (i = 0; i < rows; i++) {
+        printf(" [");
+        for (j = 0; j < n; j++)
+            printf("%d%s", local_A[i * n + j], j < n - 1 ? "," : "");
+        printf("]");
+    }
+    printf("\n");
+
+    for (i = 0; i < rows; i++) {
+        local_y[i] = 0;
+        for (j = 0; j < n; j++)
+            local_y[i] += local_A[i * n + j] * x[j];
+    }
+
+    printf("Process %d: Computed y_part =", rank);
+    for (i = 0; i < rows; i++)
+        printf(" %d", local_y[i]);
+    printf("\n");
+
+    MPI_Gather(local_y, rows, MPI_INT, y, rows, MPI_INT, 0, MPI_COMM_WORLD);
+
+    if (rank == 0) {
+        printf("Process 0: Final y = [");
+        for (i = 0; i < n; i++)
+            printf("%d%s", y[i], i < n - 1 ? ", " : "");
+        printf("]\n");
+    }
+
+    MPI_Finalize();
+    return 0;
+}
 
